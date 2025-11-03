@@ -87,6 +87,10 @@ async function sendPush(text) {
   });
 }
 
+// Only run the load balancing algo if we're charging the car
+const chargeStatus = await getLogicVar(CONFIG.VAR_CHARGING_STATUS);
+if (chargerStatus.value !== 'charging') return;
+
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
 const plan = await getPlan();
@@ -165,13 +169,22 @@ else {
 console.log(maxSetL1, maxSetL2, maxSetL3, targetA, overNow);
 
 // Compare maxSetL1, L2, L3 against the previous values, if changed, notify the user
-const chargerLimits = JSON.parse((await getLogicVar('ChargeCurrent')).value);
+let chargerLimits = {
+  L1: CONFIG.MAX_CHARGE_A,
+  L2: CONFIG.MAX_CHARGE_A,
+  L3: CONFIG.MAX_CHARGE_A
+};
 
-if (chargerLimits.L1 != maxSetL1 || chargerLimits.L2 != maxSetL2 || chargerLimits.L3 != maxSetL3) {
+const currentVar = await getLogicVar('ChargeCurrent');
+if (currentVar && currentVar.value) {
+  chargerLimits = JSON.parse(currentVar.value);
+}
+
+/*if (chargerLimits.L1 != maxSetL1 || chargerLimits.L2 != maxSetL2 || chargerLimits.L3 != maxSetL3) {
   await sendPush(
     `Lastbalanserar ${charger.name} då kapaciteten skiljer sig från inställd maxbelastning. Nya värden är ${maxSetL1}, ${maxSetL2}, ${maxSetL3} A.`
   );
-}
+}*/
 
 await upsertLogicVar('ChargeCurrent', JSON.stringify({
   L1: maxSetL1,

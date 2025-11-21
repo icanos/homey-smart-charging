@@ -290,6 +290,15 @@ let prices = [
 ];
 
 // Find out which car is connected to a charger
+// NOTE (251121): Reworked this to always assume we've connected the car with the lowest battery percentage.
+// This is done so that we make sure that even though, another car was connected, we're ensuring
+// that any car connected will be charged to the correct level. This however, introduces the possibility that 
+// the cost of charging won't be the absolute lowest.
+
+// In my case, BMW sucks, and has limited their API so that we can't rely on it to determine if the car is
+// connected to a charger or not. Therefore I've had to introduce this. I have however implemented it as a feature flag.
+const featureProbeConnectionStatus = false;
+
 for (const chargerId of CONFIG.CHARGERS) {
   const charger = await getDeviceById(chargerId);
 
@@ -300,15 +309,25 @@ for (const chargerId of CONFIG.CHARGERS) {
   let cars = Object.values(await Homey.devices.getDevices())
     .filter((dev) => dev.class === 'car');
 
-  let connectedCars = cars
-    .filter((car) => car.capabilitiesObj['ev_charging_state'].value !== 'plugged_out');
+  let connectedCars = cars;
 
-  if (connectedCars.length === 0) {
-    console.log("No car seems to be plugged in. Will use the one with the lowest battery percentage to calculate energy that needs to be added. This might not work reliably!");
+  if (featureProbeConnectionStatus) {
+    connectedCars = cars
+      .filter((car) => car.capabilitiesObj['ev_charging_state'].value !== 'plugged_out');
 
-    cars = cars
+    if (connectedCars.length === 0) {
+      console.log("No car seems to be plugged in. Will use the one with the lowest battery percentage to calculate energy that needs to be added. This might not work reliably!");
+
+      cars = cars
+        .sort((a, b) => Number(a.capabilitiesObj['measure_battery'].value) - Number(b.capabilitiesObj['measure_battery'].value));
+      connectedCars = [cars[0]];
+      console.log(cars);
+    }
+  }
+  else {
+    // Find the car with the lowest battery percentage
+    connectedCars = connectedCars
       .sort((a, b) => Number(a.capabilitiesObj['measure_battery'].value) - Number(b.capabilitiesObj['measure_battery'].value));
-    connectedCars = [cars[0]];
   }
 
   const car = connectedCars[0];
